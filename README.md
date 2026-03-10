@@ -14,9 +14,10 @@
 ## ✨ Features
 
 - **Edit iPA metadata** — change bundle ID, app name, version, and icon
+- **Inject tweaks** — add `.dylib` tweaks from the `tweaks/` folder with smart duplicate detection via `hash.json`
 - **Remove injected dylibs** — delete tweaks and patch the Mach-O binary to strip load commands
 - **Code signing** — sign single or batch iPAs using `zsign` with auto-detected certificates
-- **Dylib export** — extract `.dylib` and `.framework` files from any iPA
+- **Dylib export** — extract `.dylib` and `.framework` files to `tweaks_extracted/`
 - **Deb → iPA conversion** — convert Cydia `.deb` packages to installable `.ipa` files
 - **Interactive mode** — run without arguments for a guided menu-driven experience
 - **Cross-platform** — works on Windows, macOS, and Linux
@@ -30,6 +31,8 @@ iPA-Edit/
 ├── certificate/            # place signing certificates here
 │   ├── *.p12
 │   └── *.mobileprovision
+├── tweaks/                 # place .dylib tweaks here for injection
+├── tweaks_extracted/       # exported dylibs land here (auto-created)
 ├── zsign/                  # bundled zsign binaries (auto-detected)
 │   ├── windows/zsign.exe
 │   ├── mac/zsign
@@ -58,12 +61,17 @@ pip install -r requirements.txt
 1. Place your `.p12` certificate and `.mobileprovision` profile in the `certificate/` folder.
 2. The matching `zsign` binary for your OS is detected automatically from the `zsign/` directory.
 
+### Tweak Setup
+
+Place any `.dylib` tweak files in the `tweaks/` folder. They will appear in the numbered list when using option **8**.
+
 ## 🖥️ Platform Support
 
 | Feature | Windows | macOS | Linux |
 |:--|:--:|:--:|:--:|
 | iPA editing | ✅ | ✅ | ✅ |
 | iPA signing | ✅ | ✅ | ✅ |
+| Tweak injection | ✅ | ✅ | ✅ |
 | `.deb` → `.ipa` | ✅ 7-Zip / built-in | ✅ dpkg-deb / ar | ✅ dpkg-deb / ar |
 
 ## 📖 Usage
@@ -86,7 +94,8 @@ You'll see a menu:
   5: Convert .deb to .ipa
   6: Change app icon
   7: Enable document browser
-  8: Exit
+  8: Add tweaks to iPA
+  9: Exit
 ```
 
 ### Command-Line Mode
@@ -109,12 +118,16 @@ python ipa-edit.py -i <input> -o <output> [options]
 | `-s` | Sign iPA(s) with a certificate |
 | `-e` | Convert `.deb` to `.ipa` |
 | `-k` | Keep the original source file |
+| `-tw` | Inject tweaks from `tweaks/` folder (interactive) |
 
 ### Examples
 
 ```bash
 # Edit metadata
 python ipa-edit.py -i app.ipa -o patched.ipa -b com.new.id -n "My App" -v 2.0
+
+# Inject tweaks (interactive selection)
+python ipa-edit.py -i app.ipa -tw
 
 # Remove injected tweaks & sign
 python ipa-edit.py -i app.ipa -o . -r
@@ -129,9 +142,32 @@ python ipa-edit.py -i ./ipas/ -o ./output/ -s
 python ipa-edit.py -i tweak.deb -o converted.ipa -e
 ```
 
+## 💉 Tweak Injection
+
+Place `.dylib` files in the `tweaks/` folder, then select option **8** (or use `-tw`):
+
+```
+[*] Available tweaks:
+  1: AboutME.dylib  (518 KB)
+  2: blatantsPatch.dylib  (103 KB)
+
+[?] use , for multiple | 'all' for every tweak | 'exit' to cancel
+[?] Tweak number(s) to inject: 1,2
+```
+
+**Smart duplicate detection** — each output IPA contains a `hash.json` that records the pre-sign SHA-256 of every injected tweak. On subsequent runs:
+
+| Situation | Result |
+|:--|:--|
+| Same dylib name + same hash | ⏩ Skipped (already injected) |
+| Same dylib name + different hash | 🔄 Old version removed, new one injected |
+| New dylib name | ✅ Injected |
+
+> If no `hash.json` is present (e.g. third-party tweaked IPA), conflicting dylibs are removed from the zip in pure Python before injection — no zsign `-D` flag required.
+
 ## 🔐 Certificate & Zsign Auto-Detection
 
-When using `-s` or `-r`, certificates and the signing tool are resolved automatically:
+When using `-s`, `-r`, or `-tw`, certificates and the signing tool are resolved automatically:
 
 **zsign** — checked in order:
 1. Bundled binary from `zsign/{windows,mac,ubuntu}/`

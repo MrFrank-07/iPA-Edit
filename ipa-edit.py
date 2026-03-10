@@ -17,17 +17,17 @@ About:
     Website: https://shajon.dev
     
     License: GPLv3
-
-    Original Author: https://github.com/binnichtaktiv
 '''
 
 import io
 import os
 import sys
+import json
 import time
 import atexit
 import struct
 import shutil
+import hashlib
 import tarfile
 import zipfile
 import platform
@@ -136,7 +136,7 @@ class IPAEditor:
         if base_name.lower().endswith(".ipa") or base_name.lower().endswith(".deb"):
             base_name = base_name[:-4]
             
-        folder_name = "Signed" if suffix == "signed" else "Unsigned"
+        folder_name = "Signed" if suffix.endswith("signed") else "Unsigned"
         folder_path = os.path.join(self.script_dir, folder_name)
         os.makedirs(folder_path, exist_ok=True)
         
@@ -164,7 +164,7 @@ class IPAEditor:
 
     def run(self) -> None:
 
-        if not self.args.s and not self.args.e:
+        if not self.args.s and not self.args.e and not self.args.tw:
             self.ipa_path = self.args.i
             self.app_path, self.zip_path, self.payload_path = self._unzip_ipa(self.ipa_path)
 
@@ -174,7 +174,9 @@ class IPAEditor:
         if self.args.d:
             self._export_dylibs()
 
-        if self.args.r:
+        if self.args.tw:
+            self._add_tweaks()
+        elif self.args.r:
             self._remove_and_sign()
         elif self.args.s:
             self._sign()
@@ -182,11 +184,11 @@ class IPAEditor:
         if self.args.e:
             self._deb_to_ipa()
 
-        if not self.args.d and not self.args.s and not self.args.e and not self.args.r:
+        if not self.args.d and not self.args.s and not self.args.e and not self.args.r and not self.args.tw:
             if self.ipa_path is None or self.payload_path is None:
                 sys.exit("[-] Ipa_path or payload_path is not set.")
             self._zip_ipa()
-        elif not self.args.s and not self.args.e and not self.args.r:
+        elif not self.args.s and not self.args.e and not self.args.r and not self.args.tw:
             self._restore_source()
 
         print(SEP)
@@ -322,6 +324,7 @@ class IPAEditor:
         for i, f in enumerate(dylibs, 1):
             print(f"  {i}: {os.path.basename(f)}")
 
+        print(SEP)
         selection = input("[?] File numbers (comma separated) or 'exit': ").strip().lower()
         if selection == "exit":
             print(f"{WHITE}[*] Export cancelled{RESET}")
@@ -329,24 +332,27 @@ class IPAEditor:
 
         selected = [dylibs[int(n.strip()) - 1] for n in selection.split(",")]
 
-        if not os.path.exists(self.args.o):
-            sys.exit("[-] Output folder does not exist.")
+        out_dir = os.path.join(self.script_dir, "tweaks_extracted")
+        os.makedirs(out_dir, exist_ok=True)
 
         exported_fw = exported_dl = False
         for f in selected:
             if os.path.isdir(f):
-                shutil.copytree(f, os.path.join(self.args.o, os.path.basename(f)))
+                dest = os.path.join(out_dir, os.path.basename(f))
+                if os.path.isdir(dest):
+                    shutil.rmtree(dest)
+                shutil.copytree(f, dest)
                 exported_fw = True
             else:
-                shutil.copy(f, self.args.o)
+                shutil.copy(f, out_dir)
                 exported_dl = True
 
         if exported_fw and exported_dl:
-            print(f"{GREEN}[+] Exported .framework(s) and .dylib(s){RESET}")
+            print(f"{GREEN}[+] Exported .framework(s) and .dylib(s) to {out_dir}{RESET}")
         elif exported_fw:
-            print(f"{GREEN}[+] Exported .framework(s){RESET}")
+            print(f"{GREEN}[+] Exported .framework(s) to {out_dir}{RESET}")
         else:
-            print(f"{GREEN}[+] Exported .dylib(s){RESET}")
+            print(f"{GREEN}[+] Exported .dylib(s) to {out_dir}{RESET}")
 
     def _remove_and_sign(self) -> None:
         print(SEP)
@@ -622,6 +628,235 @@ class IPAEditor:
         print(f"{GREEN}[+] Saved: {ipa_out}{RESET}")
 
 
+    _HASH_JSON_NAME = "hash.json"
+    _TOOL_META = {
+        "tool":    "iPA-Edit",
+        "author":  "SHAJON-404",
+        "github":  "https://github.com/SHAJON-404/iPA-Edit",
+        "website": "https://shajon.dev",
+        "license": "GPLv3",
+    }
+
+    @staticmethod
+    def _sha256(path: str) -> str:
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+    def _list_tweaks(self) -> list[str]:
+        """Return sorted list of .dylib paths inside the tweaks/ folder."""
+        tweaks_dir = os.path.join(self.script_dir, "tweaks")
+        if not os.path.isdir(tweaks_dir):
+            return []
+        return sorted(
+            os.path.join(tweaks_dir, f)
+            for f in os.listdir(tweaks_dir)
+            if f.endswith(".dylib")
+        )
+
+    def _read_hash_json(self, ipa_path: str) -> dict[str, str]:
+        """Read {dylib_name: sha256} from hash.json inside the IPA zip.
+        Returns empty dict if the file doesn't exist or can't be parsed."""
+        try:
+            with zipfile.ZipFile(ipa_path, "r") as zf:
+                if self._HASH_JSON_NAME in zf.namelist():
+                    data = json.loads(zf.read(self._HASH_JSON_NAME))
+                    return data.get("dylibs", {})
+        except Exception:
+            pass
+        return {}
+
+    def _write_hash_json(self, ipa_path: str, dylib_hashes: dict[str, str]) -> None:
+        """Inject / update hash.json in the IPA zip (rewrites the archive)."""
+        payload = json.dumps(
+            {"_tool": self._TOOL_META, "dylibs": dylib_hashes},
+            indent=2,
+        ).encode("utf-8")
+
+        tmp = ipa_path + ".hjson_tmp"
+        with zipfile.ZipFile(ipa_path, "r") as zin:
+            with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
+                for item in zin.infolist():
+                    if item.filename == self._HASH_JSON_NAME:
+                        continue   # replaced below
+                    zout.writestr(item, zin.read(item.filename))
+                zout.writestr(self._HASH_JSON_NAME, payload)
+        os.replace(tmp, ipa_path)
+        print(f"{WHITE}[*] hash.json updated in IPA{RESET}")
+
+    def _remove_dylibs_from_ipa(self, ipa_path: str, names: list[str]) -> str:
+        """
+        Return path to a temp IPA that is a copy of ipa_path with all zip
+        entries whose basename matches any name in `names` removed.
+        Used to cleanly replace old dylib versions before calling zsign.
+        """
+        tmp_path = os.path.join(self._ensure_temp(), "_cleaned.ipa")
+        names_set = set(names)
+        removed = 0
+        with zipfile.ZipFile(ipa_path, "r") as zin:
+            with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zout:
+                for item in zin.infolist():
+                    if os.path.basename(item.filename) in names_set and \
+                            item.filename.endswith(".dylib"):
+                        print(f"{RED}[-] Removed from IPA: {item.filename}{RESET}")
+                        removed += 1
+                        continue
+                    zout.writestr(item, zin.read(item.filename))
+        print(f"{GREEN}[+] Removed {removed} old dylib(s) from IPA copy{RESET}")
+        return tmp_path
+
+    def _add_tweaks(self) -> None:
+        print(SEP)
+        print(f"{WHITE}[*] Add Tweaks to iPA{RESET}")
+
+        tweaks = self._list_tweaks()
+        if not tweaks:
+            sys.exit(f"{RED}[-] No .dylib files found in tweaks/ folder.{RESET}")
+
+        print(f"{WHITE}[*] Available tweaks:{RESET}")
+        for i, t in enumerate(tweaks, 1):
+            size_kb = os.path.getsize(t) // 1024
+            print(f"  {i}: {os.path.basename(t)}  ({size_kb} KB)")
+        print(SEP)
+
+        print("[?] use , for multiple  |  'all' for every tweak  |  'exit' to cancel")
+        selection = input("[?] Tweak number(s) to inject: ").strip().lower()
+
+        if selection == "exit":
+            print(f"{WHITE}[*] Cancelled{RESET}")
+            return
+
+        if selection == "all":
+            chosen = tweaks
+        else:
+            try:
+                chosen = [tweaks[int(n.strip()) - 1] for n in selection.split(",")]
+            except (ValueError, IndexError):
+                sys.exit("[-] Invalid selection.")
+
+        # ── Duplicate check ──────────────────────────────────────────────────
+        print(SEP)
+        existing_hashes = self._read_hash_json(self.args.i)  # {name: pre-sign hash}
+        with zipfile.ZipFile(self.args.i, "r") as _zf:
+            has_hash_json = self._HASH_JSON_NAME in _zf.namelist()
+
+        existed: list[str]   = []   # same name + same hash  → skip
+        to_inject: list[str] = []   # new or updated          → inject
+        to_remove: list[str] = []   # old dylibs to delete first (-D flag)
+
+        if has_hash_json:
+            # ── Path A: hash.json present ─────────────────────────────────
+            print(f"{WHITE}[*] Checking for already-injected tweaks via hash.json...{RESET}")
+            for path in chosen:
+                name     = os.path.basename(path)
+                src_hash = self._sha256(path)
+                if name in existing_hashes and existing_hashes[name] == src_hash:
+                    existed.append(name)
+                else:
+                    if name in existing_hashes:
+                        to_remove.append(name)
+                    to_inject.append(path)
+        else:
+            # ── Path B: no hash.json → scan zip entries for name conflicts ─
+            print(f"{WHITE}[*] No hash.json found — scanning IPA for existing dylib names...{RESET}")
+            with zipfile.ZipFile(self.args.i, "r") as zf:
+                ipa_dylib_names = {
+                    os.path.basename(e) for e in zf.namelist()
+                    if e.endswith(".dylib")
+                }
+            for path in chosen:
+                name = os.path.basename(path)
+                if name in ipa_dylib_names:
+                    print(f"{WHITE}[!] Conflict: {name} already in IPA — will remove & replace{RESET}")
+                    to_remove.append(name)
+                to_inject.append(path)
+
+        # ── Print Existed Tweak list ────────────────────────────────────────
+        if existed:
+            print(f"{WHITE}[*] Existed Tweaks (same hash — skipped):{RESET}")
+            for name in existed:
+                print(f"  {WHITE}•{RESET} {name}  {WHITE}[SHA256: {existing_hashes[name][:16]}...]{RESET}")
+        else:
+            print(f"{GREEN}[*] No exact duplicates found.{RESET}")
+
+        if not to_inject:
+            print(f"{WHITE}[*] All selected tweaks are already present. Nothing to inject.{RESET}")
+            return
+
+        print(SEP)
+        print(f"{WHITE}[*] Tweaks to inject:{RESET}")
+        for path in to_inject:
+            name  = os.path.basename(path)
+            label = f"{WHITE}[replacing old version]{RESET}" if name in to_remove else ""
+            print(f"  {GREEN}+{RESET} {name}  {label}")
+        print(SEP)
+
+        ans     = input("[?] Sign the output iPA? [Y/n]: ").lower().strip()
+        do_sign = ans in ("y", "yes", "")
+
+        zsign  = self._resolve_zsign()
+        # If there are conflicting dylibs, strip them out of the IPA first
+        # (don't use zsign -D; that flag isn't in all builds)
+        if to_remove:
+            print(SEP)
+            print(f"{WHITE}[*] Removing old dylib version(s) from IPA...{RESET}")
+            ipa_in = self._remove_dylibs_from_ipa(self.args.i, to_remove)
+        else:
+            ipa_in = self.args.i
+
+        dylib_flags = " ".join(f'-l "{t}"' for t in to_inject)
+
+        # Pre-compute hashes NOW (before zsign mutates anything)
+        new_hashes = dict(existing_hashes)
+        for path in to_inject:
+            new_hashes[os.path.basename(path)] = self._sha256(path)
+
+        if do_sign:
+            print(SEP)
+            print(f"{WHITE}[*] Signing + injecting tweaks{RESET}")
+            p12_path, mb_path = self._resolve_certificate()
+            if not p12_path or not mb_path:
+                p12_path = input("[?] .p12 path: ").strip(' "\'')
+                mb_path  = input("[?] .mobileprovision path: ").strip(' "\'')
+            cert_pw = input("[?] Certificate password: ")
+            print(SEP)
+
+            out_path = self.args.o if self.args.o else self._get_auto_out_path("tweaked_signed")
+            if not out_path.endswith(".ipa"):
+                out_path += ".ipa"
+
+            cmd = (
+                f'"{zsign}" -k "{p12_path}" -m "{mb_path}" -p "{cert_pw}"'
+                f' {dylib_flags} -o "{out_path}" -z 9 "{ipa_in}"'
+            )
+            subprocess.run(cmd, shell=True)
+            if os.path.isfile(out_path):
+                self._write_hash_json(out_path, new_hashes)
+                print(f"{GREEN}[+] Tweaked & signed: {out_path}{RESET}")
+            else:
+                print(f"{RED}[-] zsign failed — output IPA not found{RESET}")
+        else:
+            print(SEP)
+            print(f"{WHITE}[*] Injecting tweaks (ad-hoc / unsigned){RESET}")
+
+            out_path = self.args.o if self.args.o else self._get_auto_out_path("tweaked_unsigned")
+            if not out_path.endswith(".ipa"):
+                out_path += ".ipa"
+
+            cmd = (
+                f'"{zsign}" -a'
+                f' {dylib_flags} -o "{out_path}" -z 9 "{ipa_in}"'
+            )
+            subprocess.run(cmd, shell=True)
+            if os.path.isfile(out_path):
+                self._write_hash_json(out_path, new_hashes)
+                print(f"{GREEN}[+] Tweaked (unsigned): {out_path}{RESET}")
+            else:
+                print(f"{RED}[-] zsign failed — output IPA not found{RESET}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="iPA Edit – modify iPA files.")
     p.add_argument("-i", metavar="input",    type=str, help="input .ipa/.deb")
@@ -636,6 +871,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-s", action="store_true", help="sign iPA(s) with a certificate")
     p.add_argument("-e", action="store_true", help=".deb to .ipa conversion")
     p.add_argument("-k", action="store_true", help="keep source iPA/deb")
+    p.add_argument("-tw", action="store_true", help="inject tweaks from tweaks/ folder")
     return p
 
 
@@ -653,17 +889,18 @@ def interactive_mode() -> argparse.Namespace:
     print("  5: Convert .deb to .ipa")
     print("  6: Change app icon")
     print("  7: Enable document browser")
-    print("  8: Exit")
+    print("  8: Add tweaks to iPA")
+    print("  9: Exit")
     print(SEP)
 
-    choice = input("[?] Select option (1-8): ").strip()
+    choice = input("[?] Select option (1-9): ").strip()
     print(SEP)
-    if choice == "8":
+    if choice == "9":
         sys.exit(f"{WHITE}[*] Bye{RESET}")
 
     args = argparse.Namespace(
         i=None, o="", b=None, n=None, v=None, p=None,
-        f=False, d=False, r=False, s=False, e=False, k=False,
+        f=False, d=False, r=False, s=False, e=False, k=False, tw=False,
     )
 
     if choice == "1":
@@ -690,7 +927,6 @@ def interactive_mode() -> argparse.Namespace:
 
     elif choice == "2":
         args.i = input("[?] Input .ipa path: ").strip()
-        args.o = input("[?] Output folder for exported dylibs: ").strip()
         args.d = True
 
     elif choice == "3":
@@ -715,6 +951,10 @@ def interactive_mode() -> argparse.Namespace:
     elif choice == "7":
         args.i = input("[?] Input .ipa path: ").strip()
         args.f = True
+
+    elif choice == "8":
+        args.i = input("[?] Input .ipa path: ").strip(' "\'')
+        args.tw = True
 
     else:
         sys.exit("[-] Invalid option")
