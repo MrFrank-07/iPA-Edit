@@ -110,10 +110,11 @@ jobs:
 
       - name: Build release notes
         run: |
-          cat > notes.md << 'MD'
+          DATE=$(date -u '+%Y-%m-%d')
+          cat > notes.md << MD
           ## iPA Edit ${{ github.ref_name }}
 
-          > Released on **$(date -u '+%Y-%m-%d')**
+          > Released on **${DATE}**
 
           ---
 
@@ -121,11 +122,11 @@ jobs:
 
           | Platform | File | SHA-256 |
           |:--|:--|:--|
-          | 🪟 Windows | `ipa-edit-windows.exe` | `${{ steps.hashes.outputs.win }}` |
-          | 🍎 macOS   | `ipa-edit-macos`       | `${{ steps.hashes.outputs.mac }}` |
-          | 🐧 Linux   | `ipa-edit-linux`       | `${{ steps.hashes.outputs.lin }}` |
+          | 🪟 Windows | \`ipa-edit-windows.exe\` | \`${{ steps.hashes.outputs.win }}\` |
+          | 🍎 macOS   | \`ipa-edit-macos\`       | \`${{ steps.hashes.outputs.mac }}\` |
+          | 🐧 Linux   | \`ipa-edit-linux\`       | \`${{ steps.hashes.outputs.lin }}\` |
 
-          > **macOS / Linux:** run `chmod +x ipa-edit-*` before first use.
+          > **macOS / Linux:** run \`chmod +x ipa-edit-*\` before first use.
 
           ---
 
