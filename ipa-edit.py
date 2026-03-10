@@ -12,6 +12,7 @@ About:
 
     Usage: python ipa-edit.py -i <input_ipa> -o <output_ipa>
     
+    Version: v1.1
     Author [Remake]: SHAJON-404
     GitHub: https://github.com/SHAJON-404
     Website: https://shajon.dev
@@ -35,6 +36,8 @@ import plistlib
 import argparse
 import subprocess
 from PIL import Image
+
+__version__ = "1.1"
 
 # Colors
 RED = "\033[91m"

@@ -2,7 +2,14 @@
   <h1 align="center">iPA Edit</h1>
   <p align="center">
     A powerful cross-platform tool for modifying, signing, and converting iOS <code>.ipa</code> files.
-    <br />
+    <br /><br />
+    <img src="https://img.shields.io/badge/version-v1.1-6b63ff?style=flat-square" alt="Version" />
+    <img src="https://img.shields.io/badge/python-3.10+-blue?style=flat-square&logo=python&logoColor=white" alt="Python" />
+    <img src="https://img.shields.io/badge/license-GPLv3-green?style=flat-square" alt="License" />
+    <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform" />
+    <br /><br />
+    <a href="https://github.com/SHAJON-404/iPA-Edit/releases">📦 Download</a>
+    ·
     <a href="https://github.com/SHAJON-404/iPA-Edit/issues">Report Bug</a>
     ·
     <a href="https://github.com/SHAJON-404/iPA-Edit/issues">Request Feature</a>
