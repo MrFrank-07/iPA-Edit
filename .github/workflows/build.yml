@@ -44,13 +44,7 @@ jobs:
           pip install pyinstaller
 
       - name: Build binary
-        run: |
-          pyinstaller \
-            --onefile \
-            --name ipa-edit \
-            --clean \
-            --collect-all modules \
-            ipa-edit.py
+        run: pyinstaller --onefile --name ipa-edit --clean --collect-all modules ipa-edit.py
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
