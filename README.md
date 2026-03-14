@@ -1,9 +1,9 @@
 <p align="center">
   <h1 align="center">iPA Edit</h1>
   <p align="center">
-    A powerful cross-platform tool for modifying, signing, and converting iOS <code>.ipa</code> files.
+    A powerful cross-platform tool for modifying, signing, and tweaking iOS <code>.ipa</code> files.
     <br /><br />
-    <img src="https://img.shields.io/badge/version-v1.2-6b63ff?style=flat-square" alt="Version" />
+    <img src="https://img.shields.io/badge/version-v1.3-6b63ff?style=flat-square" alt="Version" />
     <img src="https://img.shields.io/badge/python-3.10+-blue?style=flat-square&logo=python&logoColor=white" alt="Python" />
     <img src="https://img.shields.io/badge/license-GPLv3-green?style=flat-square" alt="License" />
     <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform" />
@@ -20,12 +20,10 @@
 
 ## ✨ Features
 
-- **Edit iPA metadata** — change bundle ID, app name, version, and icon
 - **Inject tweaks** — add `.dylib` and `.deb` tweaks from the `tweaks/` folder, with automatic CydiaSubstrate bundling (via ElleKit) and `@rpath` patching
-- **Remove injected dylibs** — delete tweaks and patch the Mach-O binary to strip load commands
-- **Code signing** — sign single or batch iPAs using `zsign` with auto-detected certificates
-- **Dylib export** — extract `.dylib` and `.framework` files to `tweaks_extracted/`
-- **Deb → iPA conversion** — convert Cydia `.deb` packages to installable `.ipa` files
+- **Remove injected tweaks** — delete tweaks from `Frameworks/` and strip their load commands via `zsign`
+- **Export tweaks** — extract existing `.dylib` and `.framework` tweaks from an IPA to the `tweaks_extracted/` folder
+- **Code signing** — sign iPAs using `zsign` with auto-detected certificates
 - **Interactive mode** — run without arguments for a guided menu-driven experience
 - **Cross-platform** — works on Windows, macOS, and Linux
 
@@ -33,20 +31,25 @@
 
 ```
 iPA-Edit/
-├── ipa-edit.py              # main script
-├── requirements.txt
-├── certificate/            # place signing certificates here
+├── ipa-edit.py              # entry point (~55 lines)
+├── modules/                 # core logic package
+│   ├── __constants.py       # shared colors & style
+│   ├── __deb_extractor.py   # .deb (ar) archive extractor
+│   ├── __macho_utils.py     # Mach-O binary patching
+│   ├── __ipa_editor.py      # IPAEditor class
+│   ├── __tweak_manager.py   # tweak inject / remove
+│   └── __menu.py            # interactive CLI menus
+├── certificate/             # place signing certificates here
 │   ├── *.p12
 │   └── *.mobileprovision
-├── tweaks/                 # place .dylib or .deb tweaks here for injection
-├── tweaks_extracted/       # exported dylibs land here (auto-created)
-├── resources/              # place ellekit.deb here for CydiaSubstrate fallback
-├── zsign/                  # bundled zsign binaries (auto-detected)
+├── tweaks/                  # place .dylib or .deb tweaks here
+├── tweaks_extracted/        # exported tweaks land here (auto-created)
+├── zsign/                   # bundled zsign binaries (auto-detected)
 │   ├── windows/zsign.exe
 │   ├── mac/zsign
-│   └── ubuntu/zsign
-├── Signed/                 # signed output (auto-created)
-└── Unsigned/               # unsigned output (auto-created)
+│   └── linux/zsign
+├── Signed/                  # signed output (auto-created)
+└── Unsigned/                # unsigned output (auto-created)
 ```
 
 ## 🚀 Getting Started
@@ -54,14 +57,12 @@ iPA-Edit/
 ### Prerequisites
 
 - **Python 3.10+**
-- **Pillow** — `pip install Pillow`
 
 ### Installation
 
 ```bash
 git clone --depth=1 https://github.com/SHAJON-404/iPA-Edit.git
 cd iPA-Edit
-pip install -r requirements.txt
 ```
 
 ### Signing Setup *(optional)*
@@ -71,16 +72,16 @@ pip install -r requirements.txt
 
 ### Tweak Setup
 
-Place any `.dylib` or `.deb` tweak files in the `tweaks/` folder. They will appear in the numbered list when using option **8**.
+Place any `.dylib` or `.deb` tweak files in the `tweaks/` folder. They will appear in the numbered list when using option **2** in the menu.
 
 ## 🖥️ Platform Support
 
 | Feature | Windows | macOS | Linux |
 |:--|:--:|:--:|:--:|
-| iPA editing | ✅ | ✅ | ✅ |
 | iPA signing | ✅ | ✅ | ✅ |
 | Tweak injection | ✅ | ✅ | ✅ |
-| `.deb` → `.ipa` | ✅ 7-Zip / built-in | ✅ dpkg-deb / ar | ✅ dpkg-deb / ar |
+| Tweak removal | ✅ | ✅ | ✅ |
+| Tweak export | ✅ | ✅ | ✅ |
 
 ## 📖 Usage
 
@@ -95,64 +96,46 @@ python ipa-edit.py
 You'll see a menu:
 
 ```
-  1: Edit iPA (bundle ID, name, version, icon, file browser)
-  2: Export dylibs from iPA
-  3: Remove dylibs & sign iPA
-  4: Sign iPA(s)
-  5: Convert .deb to .ipa
-  6: Change app icon
-  7: Enable document browser
-  8: Add tweaks to iPA
-  9: Exit
+--------------------------------------------------------------------------------
+                    iPA Edit - By S. SHAJON
+--------------------------------------------------------------------------------
+1. Inject tweaks
+2. Remove tweaks
+3. Export tweaks from iPA
+4. Sign IPA with certificate
+5. Exit
 ```
 
 ### Command-Line Mode
 
 ```bash
-python ipa-edit.py -i <input> -o <output> [options]
+python ipa-edit.py -i <input.ipa> -o <output.ipa> [options]
 ```
 
 | Flag | Description |
 |:--|:--|
-| `-i` | Input `.ipa` or `.deb` file |
+| `-i` | Input `.ipa` file |
 | `-o` | Output path or filename |
-| `-b` | Change bundle ID |
-| `-n` | Change app display name |
-| `-v` | Change app version |
-| `-p` | Change app icon (any image format) |
-| `-f` | Enable iOS document browser |
-| `-d` | Export injected `.dylib` / `.framework` files |
-| `-r` | Remove selected dylibs, patch binary, and sign |
-| `-s` | Sign iPA(s) with a certificate |
-| `-e` | Convert `.deb` to `.ipa` |
-| `-k` | Keep the original source file |
-| `-tw` | Inject tweaks from `tweaks/` folder (interactive) |
+| `-tw` | Inject tweaks from `tweaks/` folder |
+| `-rm-tw` | Remove tweaks by name (comma-separated) |
+| `-d` / `--export-tweaks` | Export `.dylib` / `.framework` tweaks |
 
 ### Examples
 
 ```bash
-# Edit metadata
-python ipa-edit.py -i app.ipa -o patched.ipa -b com.new.id -n "My App" -v 2.0
-
 # Inject tweaks (interactive selection)
 python ipa-edit.py -i app.ipa -tw
 
-# Remove injected tweaks & sign
-python ipa-edit.py -i app.ipa -o . -r
+# Remove specific tweaks by name
+python ipa-edit.py -i app.ipa -rm-tw "TweakName.dylib,OtherTweak"
 
-# Sign a single iPA
-python ipa-edit.py -i app.ipa -o signed.ipa -s
-
-# Batch sign all iPAs in a folder
-python ipa-edit.py -i ./ipas/ -o ./output/ -s
-
-# Convert .deb to .ipa
-python ipa-edit.py -i tweak.deb -o converted.ipa -e
+# Export existing tweaks
+python ipa-edit.py -i app.ipa -d
 ```
 
 ## 💉 Tweak Injection
 
-Place `.dylib` or `.deb` files in the `tweaks/` folder, then select option **8** (or use `-tw`):
+Place `.dylib` or `.deb` files in the `tweaks/` folder, then select option **2** (or use `-tw`):
 
 ```
 [*] Available tweaks:
@@ -165,23 +148,31 @@ Place `.dylib` or `.deb` files in the `tweaks/` folder, then select option **8**
 ```
 
 **Advanced Injection System:**
-- **.deb Support**: Automatically unzips `.deb` files and locates the correct `MobileSubstrate` dynamic libraries to inject.
-- **Auto-Substrate Bundling**: If any tweak requires `CydiaSubstrate`, the script will automatically extract `ellekit.deb` from the `resources/` folder and bundle `CydiaSubstrate.framework` natively inside the app!
-- **Path Patching**: Fixes hardcoded jailbreak paths (e.g. `/Library/Frameworks/...`) to standard `@rpath/` iOS paths before injection, effectively eliminating kernel AMFI/sandbox crash issues on jailed devices.
+- **.deb Support**: Automatically extracts `.deb` archives and locates `MobileSubstrate` dynamic libraries.
+- **Auto-Substrate Bundling**: If any tweak requires `CydiaSubstrate`, `CydiaSubstrate.framework` from `ellekit.deb` is automatically bundled into the app.
+- **Path Patching**: Fixes hardcoded jailbreak paths (e.g. `/Library/Frameworks/...`) to standard `@rpath/` iOS paths before injection, preventing AMFI/sandbox crashes on jailed devices.
+
+## 🔧 Tweak Removal
+
+Select option **2** (or use `-rm-tw`). The tool will:
+
+1. Scan the IPA's `Frameworks/` folder and list all injected `.dylib` and `.framework` files.
+2. Remove selected files from the archive.
+3. Use `zsign` to strip the corresponding `LC_LOAD_WEAK_DYLIB` load commands from the main binary.
+4. Optionally re-sign the output with your certificate.
 
 ## 🔐 Certificate & Zsign Auto-Detection
 
-When using `-s`, `-r`, or `-tw`, certificates and the signing tool are resolved automatically:
+When signing, certificates and the signing tool are resolved automatically:
 
 **zsign** — checked in order:
-1. Bundled binary from `zsign/{windows,mac,ubuntu}/`
+1. Bundled binary from `zsign/{windows,mac,linux}/`
 2. `zsign` on system `PATH`
 3. Manual prompt as fallback
 
 **Certificate** — checked in order:
 1. `certificate/` folder (`.p12` + `.mobileprovision`)
-2. Input directory (batch signing scenario)
-3. Manual prompt as fallback
+2. Manual prompt as fallback
 
 ## 📝 License
 

@@ -41,11 +41,16 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
           pip install pyinstaller
 
       - name: Build binary
-        run: pyinstaller --onefile --name ipa-edit --clean ipa-edit.py
+        run: |
+          pyinstaller \
+            --onefile \
+            --name ipa-edit \
+            --clean \
+            --collect-all modules \
+            ipa-edit.py
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
@@ -54,18 +59,17 @@ jobs:
           $pkg = "staging\iPA-Edit"
           New-Item -ItemType Directory -Force -Path $pkg | Out-Null
 
-          # Copy only the explicit items we want
+          # Docs & signing tool
           Copy-Item README.md        "$pkg\README.md"
-          Copy-Item requirements.txt "$pkg\requirements.txt"
           Copy-Item -Recurse zsign   "$pkg\zsign"
 
-          # Create empty placeholder dirs
+          # Empty placeholder directories
           New-Item -ItemType Directory -Force -Path "$pkg\certificate" | Out-Null
-          New-Item -ItemType Directory -Force -Path "$pkg\tweaks"       | Out-Null
-          New-Item -ItemType Directory -Force -Path "$pkg\Signed"       | Out-Null
-          New-Item -ItemType Directory -Force -Path "$pkg\Unsigned"     | Out-Null
+          New-Item -ItemType Directory -Force -Path "$pkg\tweaks"      | Out-Null
+          New-Item -ItemType Directory -Force -Path "$pkg\Signed"      | Out-Null
+          New-Item -ItemType Directory -Force -Path "$pkg\Unsigned"    | Out-Null
 
-          # Place executable (replaces ipa-edit.py)
+          # Place compiled executable
           Copy-Item dist\${{ matrix.binary_src }} "$pkg\${{ matrix.binary_dest }}"
 
           Compress-Archive -Path staging\iPA-Edit -DestinationPath ${{ matrix.zip_name }}
@@ -76,14 +80,14 @@ jobs:
           PKG="staging/iPA-Edit"
           mkdir -p "$PKG"
 
-          # Copy only the explicit items we want
-          cp README.md requirements.txt "$PKG/"
+          # Docs & signing tool
+          cp README.md "$PKG/"
           cp -r zsign "$PKG/zsign"
 
-          # Create empty placeholder dirs
+          # Empty placeholder directories
           mkdir -p "$PKG/certificate" "$PKG/tweaks" "$PKG/Signed" "$PKG/Unsigned"
 
-          # Place executable (replaces ipa-edit.py)
+          # Place compiled executable
           cp dist/${{ matrix.binary_src }} "$PKG/${{ matrix.binary_dest }}"
           chmod +x "$PKG/${{ matrix.binary_dest }}"
 
