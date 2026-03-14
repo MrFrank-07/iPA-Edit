@@ -30,4 +30,5 @@ tweaks_extracted/
 tweaks/*.dylib
 tweaks/*.framework
 !tweaks/.gitkeep
-test.pytweaks/*.deb
+test.py
+
